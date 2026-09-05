@@ -145,21 +145,56 @@
     color:var(--coffee-soft);
     font-weight:600;
   }
-  .item-order{
-    align-self:flex-start;
-    margin-top:8px;
+  .item-actions{
+    margin-top:10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .add-btn{
     display:inline-flex;
     align-items:center;
     gap:6px;
     font-family:'Baloo 2', sans-serif;
-    font-weight:600;
-    font-size:13px;
+    font-weight:700;
+    font-size:13.5px;
     color:var(--orange-deep);
-    text-decoration:none;
-    padding:6px 2px;
+    background:transparent;
+    border:2px solid var(--orange-deep);
+    border-radius:999px;
+    padding:6px 16px;
+    cursor:pointer;
   }
-  .item-order svg{width:14px;height:14px;}
-  .item-order:active{opacity:.6;}
+  .add-btn:active{transform:scale(0.95);}
+  .qty-stepper{
+    display:flex;
+    align-items:center;
+    gap:0;
+    border:2px solid var(--coffee);
+    border-radius:999px;
+    overflow:hidden;
+  }
+  .qty-stepper button{
+    width:32px;
+    height:32px;
+    border:none;
+    background:var(--coffee);
+    color:#fff;
+    font-size:18px;
+    font-weight:700;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .qty-stepper button.minus{background:var(--cream-card);color:var(--coffee);}
+  .qty-stepper .qty-val{
+    min-width:28px;
+    text-align:center;
+    font-family:'Baloo 2', sans-serif;
+    font-weight:700;
+    font-size:15px;
+  }
 
   .cat-title{
     font-family:'Baloo 2', sans-serif;
@@ -199,6 +234,24 @@
     z-index:20;
   }
   .float-order svg{width:19px;height:19px;}
+  .float-order .badge{
+    background:#fff;
+    color:#1FAE53;
+    font-size:12px;
+    font-weight:800;
+    min-width:20px;
+    height:20px;
+    border-radius:999px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 5px;
+  }
+  .float-order.disabled{
+    background:#B9B9B9;
+    box-shadow:none;
+    pointer-events:none;
+  }
 </style>
 </head>
 <body>
@@ -228,10 +281,11 @@
 
 </div>
 
-<a class="float-order" id="floatOrder" href="#" target="_blank" rel="noopener">
+<button class="float-order disabled" id="floatOrder">
   <svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.1-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.2c-.22.6-1.3 1.16-1.8 1.2-.46.05-1.03.07-1.66-.1-.38-.1-.87-.28-1.5-.55-2.64-1.14-4.36-3.8-4.5-3.98-.13-.18-1.07-1.42-1.07-2.7 0-1.29.68-1.92.92-2.18.24-.26.53-.32.7-.32h.5c.16 0 .38-.06.6.45.22.53.75 1.83.82 1.96.07.13.11.29.02.47-.09.18-.14.29-.27.45-.13.15-.28.34-.4.46-.13.13-.27.28-.12.55.16.27.7 1.15 1.5 1.86 1.03.92 1.9 1.2 2.17 1.34.27.13.43.11.6-.07.16-.18.68-.79.86-1.06.18-.27.36-.22.6-.13.24.09 1.53.72 1.8.85.27.13.44.2.5.31.07.11.07.63-.15 1.24z"/></svg>
-  Fazer pedido no WhatsApp
-</a>
+  <span id="floatLabel">Escolha os sabores</span>
+  <span class="badge" id="floatBadge" style="display:none;">0</span>
+</button>
 
 <script>
   const WHATSAPP_NUMBER = "5511986205401";
@@ -263,16 +317,22 @@
     especiais: "Especiais",
   };
 
-  function waLink(itemName){
-    const text = `Olá! Vim pelo cardápio e quero pedir uma tapioca de ${itemName}.`;
+  function waLink(text){
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+  }
+
+  const cart = {}; // { itemId: qty }
+
+  function priceToNumber(priceStr){
+    return parseFloat(priceStr.replace("R$", "").replace(".", "").replace(",", ".").trim());
   }
 
   function renderMenu(){
     Object.keys(menu).forEach(cat => {
       const panel = document.getElementById(cat);
       let html = `<p class="cat-title">${catLabels[cat].toUpperCase()}</p>`;
-      menu[cat].forEach(item => {
+      menu[cat].forEach((item, idx) => {
+        const id = `${cat}-${idx}`;
         html += `
           <div class="item">
             <div class="item-top">
@@ -280,13 +340,84 @@
               <span class="item-price">${item.price}</span>
             </div>
             ${item.desc ? `<span class="item-desc">${item.desc}</span>` : ""}
-            <a class="item-order" href="${waLink(item.name)}" target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" fill="#B9502A"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.1-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2z"/></svg>
-              Pedir essa
-            </a>
+            <div class="item-actions" id="actions-${id}">
+              <button class="add-btn" data-id="${id}">+ Adicionar</button>
+            </div>
           </div>`;
       });
       panel.innerHTML = html;
+    });
+  }
+
+  function renderActions(id){
+    const qty = cart[id] || 0;
+    const box = document.getElementById(`actions-${id}`);
+    if(qty === 0){
+      box.innerHTML = `<button class="add-btn" data-id="${id}">+ Adicionar</button>`;
+      box.querySelector(".add-btn").addEventListener("click", () => changeQty(id, 1));
+    } else {
+      box.innerHTML = `
+        <span></span>
+        <div class="qty-stepper">
+          <button class="minus" data-id="${id}">−</button>
+          <span class="qty-val">${qty}</span>
+          <button class="plus" data-id="${id}">+</button>
+        </div>`;
+      box.querySelector(".minus").addEventListener("click", () => changeQty(id, -1));
+      box.querySelector(".plus").addEventListener("click", () => changeQty(id, 1));
+    }
+  }
+
+  function changeQty(id, delta){
+    const current = cart[id] || 0;
+    const next = Math.max(0, current + delta);
+    if(next === 0){ delete cart[id]; } else { cart[id] = next; }
+    renderActions(id);
+    updateFloatButton();
+  }
+
+  function findItem(id){
+    const [cat, idx] = id.split("-");
+    return menu[cat][idx];
+  }
+
+  function updateFloatButton(){
+    const ids = Object.keys(cart);
+    const totalQty = ids.reduce((sum, id) => sum + cart[id], 0);
+    const btn = document.getElementById("floatOrder");
+    const label = document.getElementById("floatLabel");
+    const badge = document.getElementById("floatBadge");
+
+    if(totalQty === 0){
+      btn.classList.add("disabled");
+      label.textContent = "Escolha os sabores";
+      badge.style.display = "none";
+    } else {
+      btn.classList.remove("disabled");
+      label.textContent = "Enviar pedido no WhatsApp";
+      badge.style.display = "flex";
+      badge.textContent = totalQty;
+    }
+  }
+
+  function buildOrderMessage(){
+    const ids = Object.keys(cart);
+    let total = 0;
+    let lines = ids.map(id => {
+      const item = findItem(id);
+      const qty = cart[id];
+      const unit = priceToNumber(item.price);
+      total += unit * qty;
+      return `• ${qty}x ${item.name}${item.desc ? ` (${item.desc})` : ""} — ${item.price} cada`;
+    });
+    const totalStr = total.toFixed(2).replace(".", ",");
+    return `Olá! Vim pelo cardápio do Tap Joy e quero fazer esse pedido:\n\n${lines.join("\n")}\n\nTotal: R$ ${totalStr}`;
+  }
+
+  function setupFloatButton(){
+    document.getElementById("floatOrder").addEventListener("click", () => {
+      if(Object.keys(cart).length === 0) return;
+      window.open(waLink(buildOrderMessage()), "_blank");
     });
   }
 
@@ -302,13 +433,15 @@
     });
   }
 
-  function setupFloatButton(){
-    document.getElementById("floatOrder").href =
-      `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Olá! Vim pelo cardápio do Tap Joy e quero fazer um pedido.")}`;
+  function setupAddButtons(){
+    document.querySelectorAll(".add-btn").forEach(btn => {
+      btn.addEventListener("click", () => changeQty(btn.dataset.id, 1));
+    });
   }
 
   renderMenu();
   setupTabs();
+  setupAddButtons();
   setupFloatButton();
 </script>
 
